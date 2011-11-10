@@ -74,14 +74,22 @@ found::
     dev.set_configuration()
 
     # get an endpoint instance
+    cfg = dev.get_active_configuration()
+    interface_number = cfg[0].bInterfaceNumber
+    alternate_settting = usb.control.get_interface(interface_number)
+    intf = usb.util.find_descriptor(
+        cfg, bInterfaceNumber = interface_number,
+        bAlternateSetting = alternate_setting
+    )
+
     ep = usb.util.find_descriptor(
-            dev.get_interface_altsetting(),   # first interface
-            # match the first OUT endpoint
-            custom_match = \
-                lambda e: \
-                    usb.util.endpoint_direction(e.bEndpointAddress) == \
-                    usb.util.ENDPOINT_OUT
-        )
+        intf,
+        # match the first OUT endpoint
+        custom_match = \
+        lambda e: \
+            usb.util.endpoint_direction(e.bEndpointAddress) == \
+            usb.util.ENDPOINT_OUT
+    )
 
     assert ep is not None
 
@@ -279,6 +287,19 @@ alternate setttings of the interface 1, we do so::
 
 Note that ``find_descriptor`` is in the ``usb.util`` module. It also
 accepts the early described ``custom_match`` parameter.
+
+Dealing with multiple identical devices
+***************************************
+
+Sometimes you may have two identical devices connected to the computer. How
+can you differentiate them? ``Device`` objects come with two additional
+attributes which are not part of the USB Spec, but are very useful: ``bus`` and
+``address`` attributes. First of all, it is worth to say that these attributes
+come from the backend and a backend is free to not support them, in which case
+they are set to ``None``. That said, these attributes represent the bus number
+and bus address of the device and, as you might already have imagined, can be
+used to differentiate two devices with the same ``idVendor`` and ``idProduct``
+attributes.
 
 How am I supposed to work?
 --------------------------

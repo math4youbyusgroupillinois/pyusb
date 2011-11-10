@@ -33,61 +33,84 @@ import sys
 import logging
 from usb._debug import methodtrace
 import usb._interop as _interop
-import usb.core
+import errno
 
 __author__ = 'Wander Lairson Costa'
 
-__all__ = ['get_backend']
+__all__ = [
+            'get_backend',
+            'LIBUSB_SUCESS',
+            'LIBUSB_ERROR_IO',
+            'LIBUSB_ERROR_INVALID_PARAM',
+            'LIBUSB_ERROR_ACCESS',
+            'LIBUSB_ERROR_NO_DEVICE',
+            'LIBUSB_ERROR_NOT_FOUND',
+            'LIBUSB_ERROR_BUSY',
+            'LIBUSB_ERROR_TIMEOUT',
+            'LIBUSB_ERROR_OVERFLOW',
+            'LIBUSB_ERROR_PIPE',
+            'LIBUSB_ERROR_INTERRUPTED',
+            'LIBUSB_ERROR_NO_MEM',
+            'LIBUSB_ERROR_NOT_SUPPORTED',
+            'LIBUSB_ERROR_OTHER'
+        ]
 
 _logger = logging.getLogger('usb.backend.libusb10')
 
 # libusb.h
 
-class USBError (usb.core.USBError):
-    r"""Exception class for libusb 1.0 errors.
+# return codes
 
-    Raised when a usb.backend.libusb10 call results in an error."""
-    
-    backend_errno = None
-    """The ERROR_* code produced by the call."""
+LIBUSB_SUCCESS = 0
+LIBUSB_ERROR_IO = -1
+LIBUSB_ERROR_INVALID_PARAM = -2
+LIBUSB_ERROR_ACCESS = -3
+LIBUSB_ERROR_NO_DEVICE = -4
+LIBUSB_ERROR_NOT_FOUND = -5
+LIBUSB_ERROR_BUSY = -6
+LIBUSB_ERROR_TIMEOUT = -7
+LIBUSB_ERROR_OVERFLOW = -8
+LIBUSB_ERROR_PIPE = -9
+LIBUSB_ERROR_INTERRUPTED = -10
+LIBUSB_ERROR_NO_MEM = -11
+LIBUSB_ERROR_NOT_SUPPORTED = -12
+LIBUSB_ERROR_OTHER = -99
 
-    # return codes
-    SUCCESS = 0
-    ERROR_IO = -1
-    ERROR_INVALID_PARAM = -2
-    ERROR_ACCESS = -3
-    ERROR_NO_DEVICE = -4
-    ERROR_NOT_FOUND = -5
-    ERROR_BUSY = -6
-    ERROR_TIMEOUT = -7
-    ERROR_OVERFLOW = -8
-    ERROR_PIPE = -9
-    ERROR_INTERRUPTED = -10
-    ERROR_NO_MEM = -11
-    ERROR_NOT_SUPPORTED = -12
-    ERROR_OTHER = -99
-    
-    # map return codes to strings
-    _str_error = {
-        SUCCESS:'Success (no error)',
-        ERROR_IO:'Input/output error',
-        ERROR_INVALID_PARAM:'Invalid parameter',
-        ERROR_ACCESS:'Access denied (insufficient permissions)',
-        ERROR_NO_DEVICE:'No such device (it may have been disconnected)',
-        ERROR_NOT_FOUND:'Entity not found',
-        ERROR_BUSY:'Resource busy',
-        ERROR_TIMEOUT:'Operation timed out',
-        ERROR_OVERFLOW:'Overflow',
-        ERROR_PIPE:'Pipe error',
-        ERROR_INTERRUPTED:'System call interrupted (perhaps due to signal)',
-        ERROR_NO_MEM:'Insufficient memory',
-        ERROR_NOT_SUPPORTED:'Operation not supported or unimplemented on this platform',
-        ERROR_OTHER:'Unknown error'
-    }
+# map return codes to strings
+_str_error = {
+    LIBUSB_SUCCESS:'Success (no error)',
+    LIBUSB_ERROR_IO:'Input/output error',
+    LIBUSB_ERROR_INVALID_PARAM:'Invalid parameter',
+    LIBUSB_ERROR_ACCESS:'Access denied (insufficient permissions)',
+    LIBUSB_ERROR_NO_DEVICE:'No such device (it may have been disconnected)',
+    LIBUSB_ERROR_NOT_FOUND:'Entity not found',
+    LIBUSB_ERROR_BUSY:'Resource busy',
+    LIBUSB_ERROR_TIMEOUT:'Operation timed out',
+    LIBUSB_ERROR_OVERFLOW:'Overflow',
+    LIBUSB_ERROR_PIPE:'Pipe error',
+    LIBUSB_ERROR_INTERRUPTED:'System call interrupted (perhaps due to signal)',
+    LIBUSB_ERROR_NO_MEM:'Insufficient memory',
+    LIBUSB_ERROR_NOT_SUPPORTED:'Operation not supported or unimplemented on this platform',
+    LIBUSB_ERROR_OTHER:'Unknown error'
+}
 
-    def __init__ (self, libusb_errno):
-        self.backend_errno = libusb_errno
-        super(usb.core.USBError, self).__init__(self._str_error[libusb_errno])
+# map return code to errno values
+_libusb_errno = {
+    LIBUSB_SUCCESS:None,
+    LIBUSB_ERROR_IO:errno.__dict__.get('EIO', None),
+    LIBUSB_ERROR_INVALID_PARAM:errno.__dict__.get('EINVAL', None),
+    LIBUSB_ERROR_ACCESS:errno.__dict__.get('EACCES', None),
+    LIBUSB_ERROR_NO_DEVICE:errno.__dict__.get('ENODEV', None),
+    LIBUSB_ERROR_NOT_FOUND:errno.__dict__.get('ENOENT', None),
+    LIBUSB_ERROR_BUSY:errno.__dict__.get('EBUSY', None),
+    LIBUSB_ERROR_TIMEOUT:errno.__dict__.get('ETIMEDOUT', None),
+    LIBUSB_ERROR_OVERFLOW:errno.__dict__.get('EOVERFLOW', None),
+    LIBUSB_ERROR_PIPE:errno.__dict__.get('EPIPE', None),
+    LIBUSB_ERROR_INTERRUPTED:errno.__dict__.get('EINTR', None),
+    LIBUSB_ERROR_NO_MEM:errno.__dict__.get('ENOMEM', None),
+    LIBUSB_ERROR_NOT_SUPPORTED:errno.__dict__.get('ENOSYS', None),
+    LIBUSB_ERROR_OTHER:None
+}
 
 # Data structures
 
@@ -359,13 +382,25 @@ def _setup_prototypes(lib):
                     c_uint
                 ]
 
+    # uint8_t libusb_get_bus_number(libusb_device *dev)
+    lib.libusb_get_bus_number.argtypes = [c_void_p]
+    lib.libusb_get_bus_number.restype = c_uint8
+
+    # uint8_t libusb_get_device_address(libusb_device *dev)
+    lib.libusb_get_device_address.argtypes = [c_void_p]
+    lib.libusb_get_device_address.restype = c_uint8
+
+
+
 # check a libusb function call
 def _check(retval):
     if isinstance(retval, int):
         retval = c_int(retval)
     if isinstance(retval, c_int):
         if retval.value < 0:
-           raise USBError(retval.value)
+           from usb.core import USBError
+           ret = retval.value
+           raise USBError(_str_error[ret], ret, _libusb_errno[ret])
     return retval
 
 # wrap a device
@@ -425,6 +460,8 @@ class _LibUSB(usb.backend.IBackend):
     def get_device_descriptor(self, dev):
         dev_desc = _libusb_device_descriptor()
         _check(_lib.libusb_get_device_descriptor(dev.devid, byref(dev_desc)))
+        dev_desc.bus = _lib.libusb_get_bus_number(dev.devid)
+        dev_desc.address = _lib.libusb_get_device_address(dev.devid) 
         return dev_desc
 
     @methodtrace(_logger)
