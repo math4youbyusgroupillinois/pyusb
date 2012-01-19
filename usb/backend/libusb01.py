@@ -179,7 +179,7 @@ class _DeviceDescriptor:
         self.iSerialNumber = desc.iSerialNumber
         self.bNumConfigurations = desc.bNumConfigurations
         self.address = dev.devnum
-        self.bus = dev.bus[0].location
+        self.bus = int(dev.bus[0].dirname)
 
 _lib = None
 
